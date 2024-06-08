@@ -9,8 +9,9 @@ ENV GO111MODULE=on \
 # 设置工作目录
 WORKDIR /build
 
-# 复制 go.mod 和 go.sum 文件, 先下载依赖
+# 复制 go.mod 和 go.sum 文件,先下载依赖
 COPY go.mod go.sum ./
+#ENV GOPROXY=https://goproxy.cn,direct
 RUN go mod download
 
 # 复制整个项目并构建可执行文件
@@ -24,19 +25,15 @@ FROM alpine
 RUN apk --no-cache add ca-certificates tzdata
 
 # 从构建阶段复制可执行文件
-COPY --from=builder /coze-discord-proxy /coze-discord-proxy
+COPY --from=builder /coze-discord-proxy .
 
-# 创建目录并设置权限
 RUN mkdir -p /app/coze-discord-proxy/data/config && chmod 777 /app/coze-discord-proxy/data/config
-
-# 写入配置文件
 RUN printf '%s' "$BOT_CONFIG" | sed 's/\\/"/g' > /app/coze-discord-proxy/data/config/bot_config.json
+
 
 # 暴露端口
 EXPOSE 7077
-
-# 设置工作目录
+# 工作目录
 WORKDIR /app/coze-discord-proxy/data
-
 # 设置入口命令
 ENTRYPOINT ["/coze-discord-proxy"]
