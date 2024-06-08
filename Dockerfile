@@ -29,8 +29,11 @@ COPY --from=builder /coze-discord-proxy /coze-discord-proxy
 # 创建目录并设置权限
 RUN mkdir -p /app/coze-discord-proxy/data/config && chmod 777 /app/coze-discord-proxy/data/config
 
-# 设置环境变量并打印以调试
+# 设置构建参数
+ARG BOT_CONFIG
 ENV BOT_CONFIG $BOT_CONFIG
+
+# 打印 BOT_CONFIG 以进行调试
 RUN echo "BOT_CONFIG value: $BOT_CONFIG"
 
 # 写入配置文件
