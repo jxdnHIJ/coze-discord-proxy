@@ -181,6 +181,9 @@ func ChatForOpenAI(c *gin.Context) {
 		if errors.As(err, &myErr) {
 			response.OpenAIError.Message = "model_not_found"
 		}
+		if errors.As(err, &myerr.ErrNoBotId) {
+			response.OpenAIError.Message = "no_available_bot"
+		}
 		c.JSON(http.StatusInternalServerError, response)
 		return
 	}
@@ -333,9 +336,14 @@ loop:
 				c.SSEvent("", " "+string(bytes))
 
 				if common.SliceContains(common.CozeErrorMessages, reply.Choices[0].Message.Content) {
-					if common.SliceContains(common.CozeDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
+					if common.SliceContains(common.CozeUserDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
 						common.LogWarn(c, fmt.Sprintf("USER_AUTHORIZATION:%s DAILY LIMIT", userAuth))
 						discord.UserAuthorizations = common.FilterSlice(discord.UserAuthorizations, userAuth)
+					}
+					if common.SliceContains(common.CozeCreatorDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
+						common.LogWarn(c, fmt.Sprintf("BOT_ID:%s DAILY LIMIT", calledCozeBotId))
+						//discord.BotConfigList = discord.FilterBotConfigByBotId(discord.BotConfigList, calledCozeBotId)
+						discord.DelLimitBot(calledCozeBotId)
 					}
 					c.SSEvent("", " [DONE]")
 					return false // 关闭流式连接
@@ -357,9 +365,15 @@ loop:
 			select {
 			case reply := <-replyChan:
 				if common.SliceContains(common.CozeErrorMessages, reply.Choices[0].Message.Content) {
-					if common.SliceContains(common.CozeDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
+					if common.SliceContains(common.CozeUserDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
 						common.LogWarn(c, fmt.Sprintf("USER_AUTHORIZATION:%s DAILY LIMIT", userAuth))
 						discord.UserAuthorizations = common.FilterSlice(discord.UserAuthorizations, userAuth)
+					}
+					if common.SliceContains(common.CozeCreatorDailyLimitErrorMessages, reply.Choices[0].Message.Content) {
+						common.LogWarn(c, fmt.Sprintf("BOT_ID:%s DAILY LIMIT", calledCozeBotId))
+						//discord.BotConfigList = discord.FilterBotConfigByBotId(discord.BotConfigList, calledCozeBotId)
+						discord.DelLimitBot(calledCozeBotId)
+
 					}
 					c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
 						OpenAIError: model.OpenAIError{
@@ -566,33 +580,42 @@ func ImagesForOpenAI(c *gin.Context) {
 	for {
 		select {
 		case reply := <-replyChan:
-			if reply.DailyLimit {
-				common.LogWarn(c, fmt.Sprintf("USER_AUTHORIZATION:%s DAILY LIMIT", userAuth))
-				discord.UserAuthorizations = common.FilterSlice(discord.UserAuthorizations, userAuth)
-				c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
-					OpenAIError: model.OpenAIError{
-						Message: "daily limit for sending messages",
-						Type:    "request_error",
-						Code:    "500",
-					},
-				})
-				return
-			}
-			if request.ResponseFormat == "b64_json" && reply.Data != nil && len(reply.Data) > 0 {
-				for _, data := range reply.Data {
-					if data.URL != "" {
-						base64Str, err := getBase64ByUrl(data.URL)
-						if err != nil {
-							c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
-								OpenAIError: model.OpenAIError{
-									Message: err.Error(),
-									Type:    "request_error",
-									Code:    "500",
-								},
-							})
-							return
+			if len(reply.Data) > 0 {
+				if common.SliceContains(common.CozeErrorMessages, reply.Data[0].RevisedPrompt) {
+					if common.SliceContains(common.CozeUserDailyLimitErrorMessages, reply.Data[0].RevisedPrompt) {
+						common.LogWarn(c, fmt.Sprintf("USER_AUTHORIZATION:%s DAILY LIMIT", userAuth))
+						discord.UserAuthorizations = common.FilterSlice(discord.UserAuthorizations, userAuth)
+					}
+					if common.SliceContains(common.CozeCreatorDailyLimitErrorMessages, reply.Data[0].RevisedPrompt) {
+						common.LogWarn(c, fmt.Sprintf("BOT_ID:%s DAILY LIMIT", calledCozeBotId))
+						//discord.BotConfigList = discord.FilterBotConfigByBotId(discord.BotConfigList, calledCozeBotId)
+						discord.DelLimitBot(calledCozeBotId)
+					}
+					c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
+						OpenAIError: model.OpenAIError{
+							Message: reply.Data[0].RevisedPrompt,
+							Type:    "request_error",
+							Code:    "500",
+						},
+					})
+					return
+				}
+				if request.ResponseFormat == "b64_json" && reply.Data != nil && len(reply.Data) > 0 {
+					for _, data := range reply.Data {
+						if data.URL != "" {
+							base64Str, err := getBase64ByUrl(data.URL)
+							if err != nil {
+								c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
+									OpenAIError: model.OpenAIError{
+										Message: err.Error(),
+										Type:    "request_error",
+										Code:    "500",
+									},
+								})
+								return
+							}
+							data.B64Json = "data:image/webp;base64," + base64Str
 						}
-						data.B64Json = "data:image/webp;base64," + base64Str
 					}
 				}
 			}
@@ -672,6 +695,10 @@ func getSendChannelIdAndCozeBotId(c *gin.Context, channelId *string, model strin
 			Message: fmt.Sprintf("[proxy-secret:%s]+[model:%s]未匹配到有效bot", secret, model),
 		}
 	} else {
+
+		if discord.BotConfigExist || discord.CozeBotId == "" {
+			return "", "", false, myerr.ErrNoBotId
+		}
 
 		if channelId != nil && *channelId != "" {
 			return *channelId, discord.CozeBotId, false, nil
