@@ -6,6 +6,8 @@
 
 # coze-discord-proxy
 
+<a href="https://trendshift.io/repositories/7350" target="_blank"><img src="https://trendshift.io/api/badge/repositories/7350" alt="deanxv%2Fcoze-discord-proxy | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 _代理`Discord`对话`Coze-Bot`，实现以API形式请求GPT4模型，提供对话、文生图、图生文、知识库检索等功能_
 
 _觉得有点意思的话 别忘了点个🌟_
@@ -19,7 +21,7 @@ _觉得有点意思的话 别忘了点个🌟_
 
 </div>
 
-## 功能
+## 功能(目前项目功能已趋于稳定，迭代不会很频繁，有bug可以提issue哦！)
 
 - [x] 完美适配`NextChat`,`one-api`,`LobeChat`等对话面板。
 - [x] 完美支持对话隔离。
@@ -269,6 +271,3 @@ Java: https://github.com/oddfar/coze-discord (目前不可用)
 Coze 官网 : https://www.coze.com
 
 Discord 开发地址 : https://discord.com/developers/applications
-
-
-
